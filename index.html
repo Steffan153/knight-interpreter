@@ -678,6 +678,9 @@
         codeEditor = monaco.editor.create(document.querySelector("#code"), {
           language: "knight",
           lineNumbers: "off",
+          minimap: {
+            enabled: false,
+          },
           folding: false,
           theme: 'vs-dark',
           wordWrap: 'on'
@@ -685,6 +688,9 @@
         inputEditor = monaco.editor.create(document.querySelector("#inputs"), {
           language: "plaintext",
           lineNumbers: "off",
+          minimap: {
+            enabled: false,
+          },
           folding: false,
           theme: 'vs-dark',
           wordWrap: 'on'
