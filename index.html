@@ -682,7 +682,8 @@
             enabled: false,
           },
           folding: false,
-          theme: 'vs-dark'
+          theme: 'vs-dark',
+          wordWrap: 'on'
         });
         inputEditor = monaco.editor.create(document.querySelector("#inputs"), {
           language: "plaintext",
@@ -691,7 +692,8 @@
             enabled: false,
           },
           folding: false,
-          theme: 'vs-dark'
+          theme: 'vs-dark',
+          wordWrap: 'on'
         });
         codeEditor.onDidChangeModelContent(() => {
           $(".bytecount").innerText = codeEditor.getValue().replace(/\r\n/g, "\n").length;
