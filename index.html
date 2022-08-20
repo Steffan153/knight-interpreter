@@ -16,6 +16,7 @@
         font-family: "DejaVu Sans Mono";
         margin-top: 15px;
         font-size: 0.9rem;
+        word-break: break-all;
       }
       .too-many {
         margin-top: 10px;
@@ -467,7 +468,7 @@
 
         register("R", () => new Int(Math.floor(Math.random() * 0x1_0000_0000)));
 
-        register("E", (string) => run(string.toString()));
+        register("E", (string) => evalRun(string.toString()));
 
         register("A", (a) => {
           const b = a.run();
@@ -588,6 +589,16 @@
 
           return new Str(str.substr(0, start) + repl + str.substr(start + len));
         });
+
+        function evalRun(input) {
+          const value = Value.parse(new Stream(input.toString()));
+
+          if (value === null) {
+            throw new ParseError("No value could be parsed!");
+          } else {
+            return value.run();
+          }
+        }
 
         function run(input, inps = []) {
           inputs = [...inps];
