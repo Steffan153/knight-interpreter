@@ -707,7 +707,11 @@
         monaco.languages.registerHoverProvider("knight", {
           provideHover: (model, position) => {
             const code = model.getValue();
-            const startAt = model.getOffsetAt(position);
+            let startAt = model.getOffsetAt(position);
+            let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            while (upper.includes(code[startAt]) && upper.includes(code[startAt - 1])) {
+              startAt--;
+            }
             let c = code.slice(startAt);
             function f() {
               if (!c) return null;
