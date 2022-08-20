@@ -101,6 +101,26 @@
         display: none !important;
         visibility: hidden !important;
       }
+
+      .firstArg {
+        background-color: #ffc5c5;
+        color: black !important;
+      }
+
+      .secondArg {
+        background-color: #fff7bc;
+        color: black !important;
+      }
+
+      .thirdArg {
+        background-color: #b6ffb1;
+        color: black !important;
+      }
+
+      .fourthArg {
+        background-color: #bfcbff;
+        color: black !important;
+      }
     </style>
     <script>
       window.Knight = (() => {
@@ -683,6 +703,59 @@
             ],
           },
         });
+        let decorations = [];
+        monaco.languages.registerHoverProvider("knight", {
+          provideHover: (model, position) => {
+            const code = model.getValue();
+            const startAt = model.getOffsetAt(position);
+            let c = code.slice(startAt);
+            function f() {
+              if (!c) return null;
+              if (" \t\r\n".includes(c[0])) {
+                const t = c[0];
+                c = c.slice(1);
+                const r = f();
+                return r === null
+                  ? t
+                  : Array.isArray(r)
+                  ? [t + r[0], ...r.slice(1)]
+                  : t + r;
+              }
+
+              const funcTypes = [
+                /^((['"])[^\2]*\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*)/, // nilads
+                /^([~!:]|[OLADBCQ][A-Z_]*)/, // monads
+                /^([+\-*\/%^<>?&|;=W]|[W][A-Z_]*)/, // dyads
+                /^[IG][A-Z_]*/, // triads
+                /^S[A-Z_]*/, // tetrads
+              ];
+
+              for (const idx in funcTypes) {
+                const match = c.match(funcTypes[idx]);
+                if (match) {
+                  c = c.slice(match[0].length);
+                  return +idx === 0
+                    ? match[0]
+                    : [match[0], ...[...Array(+idx)].map(() => f())];
+                }
+              }
+            }
+            const joiner = x => Array.isArray(x) ? x.map(joiner).join('') : x === null ? '' : x;
+            const res = f();
+            if (!res || !Array.isArray(res)) {
+              decorations = model.deltaDecorations(decorations, []);
+              return;
+            };
+            const ints = res.map((s => v => [s, s += joiner(v).length])(startAt)).slice(1);
+            const lnCols = ints.map(x => x.map(x => model.getPositionAt(x)));
+            decorations = model.deltaDecorations(decorations, decorations = lnCols.map((x, i) => ({
+              range: new monaco.Range(x[0].lineNumber, x[0].column, x[1].lineNumber, x[1].column),
+              options: {
+                inlineClassName: ['firstArg', 'secondArg', 'thirdArg', 'fourthArg'][i],
+              }
+            })));
+          },
+        });
         codeEditor = monaco.editor.create(document.querySelector("#code"), {
           language: "knight",
           lineNumbers: "off",
@@ -690,9 +763,9 @@
             enabled: false,
           },
           folding: false,
-          theme: 'vs-dark',
-          wordWrap: 'on',
-          quickSuggestions: false
+          theme: "vs-dark",
+          wordWrap: "on",
+          quickSuggestions: false,
         });
         inputEditor = monaco.editor.create(document.querySelector("#inputs"), {
           language: "plaintext",
@@ -701,9 +774,14 @@
             enabled: false,
           },
           folding: false,
-          theme: 'vs-dark',
-          wordWrap: 'on',
-          quickSuggestions: false
+          theme: "vs-dark",
+          wordWrap: "on",
+          quickSuggestions: false,
+        });
+        codeEditor.getModel().setEOL(0);
+        inputEditor.getModel().setEOL(0);
+        document.querySelector('#code').addEventListener('mouseleave', () => {
+          decorations = codeEditor.getModel().deltaDecorations(decorations, []);
         });
         codeEditor.onDidChangeModelContent(() => {
           $(".bytecount").innerText = codeEditor.getValue().replace(/\r\n/g, "\n").length;
@@ -714,6 +792,8 @@
             const [c, i] = JSON.parse(decode(code));
             codeEditor.setValue(c);
             inputEditor.setValue(i);
+            codeEditor.getModel().setEOL(0);
+            inputEditor.getModel().setEOL(0);
           } catch (e) {}
         }
       });
@@ -730,7 +810,7 @@
           );
           $(".output").innerText = out;
         } catch (e) {
-          $('.output').innerText = e;
+          $(".output").innerText = e;
         }
       });
       const encode = (x) => btoa(unescape(encodeURIComponent(x.replace(/\r\n/g, "\n"))));
