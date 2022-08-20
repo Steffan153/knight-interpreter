@@ -727,7 +727,7 @@
               }
 
               const funcTypes = [
-                /^((['"])[^\2]*\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*)/, // nilads
+                /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*)/, // nilads
                 /^([~!:]|[OLADBCQ][A-Z_]*)/, // monads
                 /^([+\-*\/%^<>?&|;=W]|[W][A-Z_]*)/, // dyads
                 /^[IG][A-Z_]*/, // triads
@@ -746,10 +746,11 @@
             }
             const joiner = x => Array.isArray(x) ? x.map(joiner).join('') : x === null ? '' : x;
             const res = f();
+            console.log(res);
             if (!res || !Array.isArray(res)) {
               decorations = model.deltaDecorations(decorations, []);
               return;
-            };
+            }
             const ints = res.map((s => v => [s, s += joiner(v).length])(startAt)).slice(1);
             const lnCols = ints.map(x => x.map(x => model.getPositionAt(x)));
             decorations = model.deltaDecorations(decorations, decorations = lnCols.map((x, i) => ({
