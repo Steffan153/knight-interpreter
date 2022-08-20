@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap"
@@ -46,19 +46,6 @@
       }
       button:not(.run):not(.gen):not(.cgcc):hover {
         background-color: #08437e;
-      }
-      textarea {
-        font-family: "DejaVu Sans Mono";
-        border: 1px solid #cbcbcb;
-        border-radius: 8px;
-        width: 100% !important;
-        outline: none !important;
-        padding: 10px;
-        transition: box-shadow 0.3s;
-        margin-top: 5px;
-      }
-      textarea:focus {
-        box-shadow: 1px 1px 6px rgba(0, 0, 0, 0.5);
       }
 
       label[for="inputs"] {
@@ -103,6 +90,11 @@
         align-items: center;
         gap: 20px;
         justify-content: center;
+      }
+
+      .monaco-editor .editor-widget {
+        display: none !important;
+        visibility: hidden !important;
       }
     </style>
     <script>
@@ -659,7 +651,7 @@
       let codeEditor, inputEditor;
       require.config({
         paths: {
-          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs",
+          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs",
         },
       });
       require(["vs/editor/editor.main"], function () {
@@ -687,14 +679,15 @@
           },
         });
         codeEditor = monaco.editor.create(document.querySelector("#code"), {
-          language: "knight",
+          language: "plaintext",
           lineNumbers: "off",
           minimap: {
             enabled: false,
           },
           folding: false,
           theme: 'vs-dark',
-          wordWrap: 'on'
+          wordWrap: 'on',
+          quickSuggestions: false
         });
         inputEditor = monaco.editor.create(document.querySelector("#inputs"), {
           language: "plaintext",
@@ -704,7 +697,8 @@
           },
           folding: false,
           theme: 'vs-dark',
-          wordWrap: 'on'
+          wordWrap: 'on',
+          quickSuggestions: false
         });
         codeEditor.onDidChangeModelContent(() => {
           $(".bytecount").innerText = codeEditor.getValue().replace(/\r\n/g, "\n").length;
