@@ -121,6 +121,9 @@
         background-color: #bfcbff;
         color: black !important;
       }
+      .minify {
+        margin-top: 15px;
+      }
     </style>
     <script>
       window.Knight = (() => {
@@ -666,6 +669,7 @@
         <label for="code">Code: <span class="bytecount">0</span> bytes</label>
       </div>
       <div id="code"></div>
+      <button class="minify">Minify</button> <button class="disable-show-args">Disable showing arguments on hover</button>
       <div><label for="inputs">Inputs:</label></div>
       <div id="inputs"></div>
       <div class="output"></div>
@@ -704,8 +708,13 @@
           },
         });
         let decorations = [];
+        let showArgs = true;
         monaco.languages.registerHoverProvider("knight", {
           provideHover: (model, position) => {
+            if (!showArgs) {
+              decorations = model.deltaDecorations(decorations, []);
+              return;
+            }
             const code = model.getValue();
             let startAt = model.getOffsetAt(position);
             let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -801,6 +810,27 @@
             inputEditor.getModel().setEOL(0);
           } catch (e) {}
         }
+        document.querySelector('.minify').addEventListener('click', () => {
+          let tokens = codeEditor.getValue().match(/\d+|[a-z_][_a-z\d]*|[A-Z]+|'[^]*?'|"[^]*?"|[^()\[\]{}\s]/g)
+          let vars = {}, c = 0;
+          codeEditor.setValue(tokens.map((token,i,a) => {
+            prev = a[i-1] || ''
+            if (token[0] == '"' || token[0] == "'") {
+              return token
+            } else if (token.match(/^[_a-z][_a-z\d]*$/)) {
+              return (prev.match(/^[_a-z][_a-z\d]*$/) ? ' ' : '') + token;
+            } else if (token.match(/^[A-Z]+$/)) {
+              return (prev.match(/^[A-Z]+$/) ? ' ' : '') + token[0];
+            } else if (token.match(/^\d+$/)) {
+              return (prev.match(/^[_a-z\d]$/) ? ' ' : '') + token;
+            } else return token;
+          }).join(''));
+          codeEditor.getModel().setEOL(0);
+        });
+        document.querySelector('.disable-show-args').addEventListener('click', () => {
+          showArgs = !showArgs;
+          document.querySelector('.disable-show-args').innerText = document.querySelector('.disable-show-args').innerText.replace(/Disable|Enable/, showArgs ? 'Disable' : 'Enable');
+        });
       });
     </script>
     <script>
