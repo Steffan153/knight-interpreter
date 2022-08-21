@@ -847,7 +847,18 @@
           let c = codeEditor.getValue();
           function f() {
             if (!c) return null;
-            if (" \t\r\n".includes(c[0])) {
+            if (c[0] === '#') {
+              const i = c.indexOf('\n') + 1;
+              c = c.slice(i);
+              const t = ' '.repeat(i);
+              const r = f();
+              return r === null
+                ? t
+                : Array.isArray(r)
+                ? [t + r[0], ...r.slice(1)]
+                : t + r;
+            }
+            if (" \t\r\n()[]{}".includes(c[0])) {
               c = c.slice(1);
               return f();
             }
