@@ -669,7 +669,7 @@
         <label for="code">Code: <span class="bytecount">0</span> bytes</label>
       </div>
       <div id="code"></div>
-      <button class="minify">Minify</button> <button class="disable-show-args">Disable showing arguments on hover</button>
+      <button class="minify">Minify</button><button class="format">Format</button> <button class="disable-show-args">Disable showing arguments on hover</button>
       <div><label for="inputs">Inputs:</label></div>
       <div id="inputs"></div>
       <div class="output"></div>
@@ -811,7 +811,7 @@
           } catch (e) {}
         }
         document.querySelector('.minify').addEventListener('click', () => {
-          let tokens = codeEditor.getValue().match(/\d+|[a-z_][_a-z\d]*|[A-Z]+|'[^]*?'|"[^]*?"|[^()\[\]{}\s]/g)
+          let tokens = codeEditor.getValue().replace(/#.*$/mg, '').match(/\d+|[a-z_][_a-z\d]*|[A-Z]+|'[^]*?'|"[^]*?"|[^()\[\]{}\s:]/g)
           let vars = {}, c = 0;
           codeEditor.setValue(tokens.map((token,i,a) => {
             prev = a[i-1] || ''
@@ -825,6 +825,72 @@
               return (prev.match(/^[_a-z\d]$/) ? ' ' : '') + token;
             } else return token;
           }).join(''));
+          codeEditor.getModel().setEOL(0);
+        });
+        document.querySelector('.format').addEventListener('click', () => {
+          let c = codeEditor.getValue();
+          function f() {
+            if (!c) return null;
+            if (" \t\r\n".includes(c[0])) {
+              c = c.slice(1);
+              return f();
+            }
+
+            const funcTypes = [
+              /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*)/, // nilads
+              /^([~!:]|[OLADBCQE][A-Z_]*)/, // monads
+              /^([+\-*\/%^<>?&|;=W]|[W][A-Z_]*)/, // dyads
+              /^[IG][A-Z_]*/, // triads
+              /^S[A-Z_]*/, // tetrads
+            ];
+
+            for (const idx in funcTypes) {
+              const match = c.match(funcTypes[idx]);
+              if (match) {
+                c = c.slice(match[0].length);
+                const name =
+                  {
+                    E: "EVAL",
+                    O: "OUTPUT",
+                    L: "LENGTH",
+                    A: "ASCII",
+                    Q: "QUIT",
+                    D: "DUMP",
+                    S: "SUBSTITUTE",
+                    G: "GET",
+                    P: "PROMPT",
+                    T: "TRUE",
+                    F: "FALSE",
+                    N: "NULL",
+                    R: "RANDOM",
+                    I: "IF",
+                    W: "WHILE",
+                    B: "BLOCK",
+                    C: "CALL"
+                  }[match[0]] || match[0];
+                return +idx === 0 ? name : [name, ...[...Array(+idx)].map(() => f())];
+              }
+            }
+          }
+          const g = (x, p) => {
+            if (typeof x === 'string') return x;
+            if (x === null) return '';
+            if (x[0] === ';') {
+              return "; " + g(x[1], 1) + "\n" + (x[2][0] === ";" ? g(x[2], 1) : ": " + g(x[2], 1));
+            }
+            if (x[0] === 'WHILE') {
+              return "WHILE " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            if (x[0] === 'IF') {
+              return "IF " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n') + "\n# ELSE\n" + g(x[3], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            if (x[0] === 'BLOCK') {
+              return "BLOCK" + "\n" + g(x[1], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            return p ? x.map(x => g(x)).join(' ') : '(' + x.map(x => g(x)).join(' ') + ')';
+          };
+
+          codeEditor.setValue(g(f()));
           codeEditor.getModel().setEOL(0);
         });
         document.querySelector('.disable-show-args').addEventListener('click', () => {
