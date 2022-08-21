@@ -578,8 +578,13 @@
         });
 
         register("W", (condition, body) => {
+          let count = 0;
           while (condition.toBoolean()) {
             body.run();
+            count++;
+            if (count > 10000) {
+              throw new RuntimeError("Loop ran more than 10,000 times; execution stopped to prevent infinite loop.");
+            }
           }
 
           return new Null();
