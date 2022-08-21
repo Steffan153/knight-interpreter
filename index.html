@@ -854,8 +854,10 @@
             if (!c) return null;
             if (c[0] === '#') {
               const i = c.indexOf('\n') + 1;
+              let c = c.slice(0, i);
               c = c.slice(i);
-              return f();
+              const r = f();
+              return Array.isArray(r) ? [c + r[0], ...r.slice(1)] : c + r;
             }
             if (" \t\r\n()[]{}".includes(c[0])) {
               c = c.slice(1);
