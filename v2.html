@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Knight</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap"
+    />
+    <style>
+      @font-face {
+        font-family: "DejaVu Sans Mono";
+        src: url("DejaVuSansMono.ttf") format("truetype");
+        font-display: swap;
+      }
+      .output {
+        white-space: pre-wrap;
+        font-family: "DejaVu Sans Mono";
+        margin-top: 15px;
+        font-size: 0.9rem;
+        word-break: break-all;
+      }
+      .too-many {
+        margin-top: 10px;
+      }
+      body {
+        font-family: "Open Sans";
+        display: flex;
+        justify-content: center;
+        margin: 0;
+        background-color: rgb(46, 46, 46);
+        color: white;
+      }
+      .container {
+        width: calc(min(95vw, 900px));
+        margin-top: 30px;
+        margin-bottom: 30px;
+      }
+      button:not(.run):not(.gen):not(.cgcc) {
+        font-family: inherit;
+        background-color: #1469be;
+        color: white;
+        padding: 8px 15px;
+        border: none;
+        border-radius: 7px;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+      button:not(.run):not(.gen):not(.cgcc):hover {
+        background-color: #08437e;
+      }
+
+      label[for="inputs"] {
+        margin-top: 15px;
+        display: inline-block;
+      }
+
+      .copy {
+        margin-top: 15px;
+      }
+
+      #code,
+      #inputs {
+        width: 100%;
+        height: 300px;
+        border: 1px solid #555;
+        margin-top: 5px;
+      }
+
+      #inputs {
+        height: 150px;
+      }
+      .run,
+      .gen,
+      .cgcc {
+        background: none;
+        border: none;
+        outline: none !important;
+        cursor: pointer;
+      }
+      svg {
+        width: 25px;
+        fill: #fff;
+        transition: fill 0.2s;
+      }
+      .btns button:hover svg {
+        fill: rgb(64, 160, 255);
+      }
+
+      .btns {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        justify-content: center;
+      }
+
+      .monaco-editor .editor-widget {
+        display: none !important;
+        visibility: hidden !important;
+      }
+
+      .firstArg {
+        background-color: #ffc5c5;
+        color: black !important;
+      }
+
+      .secondArg {
+        background-color: #fff7bc;
+        color: black !important;
+      }
+
+      .thirdArg {
+        background-color: #b6ffb1;
+        color: black !important;
+      }
+
+      .fourthArg {
+        background-color: #bfcbff;
+        color: black !important;
+      }
+      .minify {
+        margin-top: 15px;
+      }
+    </style>
+    <script>
+      window.Knight = (() => {
+        let inputs = [];
+        let output = "";
+
+        class KnightError extends Error {}
+        class ParseError extends KnightError {}
+        class RuntimeError extends KnightError {}
+
+        class Stream {
+          constructor(source) {
+            this.source = source;
+          }
+
+          stripWhitespace() {
+            this.match(/^([\]\[\s(){}:]+|#[^\n]*(\n|$))*/);
+          }
+
+          peek() {
+            return this.source[0] || null;
+          }
+
+          match(regex, group = 0) {
+            const match = regex.exec(this.source);
+            if (match === null) {
+              return null;
+            }
+            this.source = this.source.substr(match[0].length);
+            return match[group];
+          }
+
+          toString() {
+            return this.source;
+          }
+        }
+
+        const TYPES = [];
+        class Value {
+          static parse(stream) {
+            stream.stripWhitespace();
+
+            for (var i = 0; i < TYPES.length; i++) {
+              const match = TYPES[i].parse(stream);
+
+              if (match) {
+                return match;
+              }
+            }
+
+            return null;
+          }
+
+          run() {
+            throw new Error();
+          }
+
+          debug() {
+            throw new Error();
+          }
+
+          toString() {
+            return this.run().toString();
+          }
+
+          toNumber() {
+            return this.run().toNumber();
+          }
+
+          toBoolean() {
+            return this.run().toBoolean();
+          }
+
+          toList() {
+            return this.run().toList();
+          }
+        }
+
+        class Literal extends Value {
+          _data;
+
+          constructor(data) {
+            super();
+
+            this._data = data;
+          }
+
+          run() {
+            return this;
+          }
+
+          toString() {
+            return String(this._data);
+          }
+
+          toNumber() {
+            return Number(this._data);
+          }
+
+          toBoolean() {
+            return Boolean(this._data);
+          }
+
+          eql(rhs) {
+            return rhs instanceof this.constructor && this._data === rhs._data;
+          }
+        }
+
+        class Bool extends Literal {
+          static parse(stream) {
+            const match = stream.match(/^([TF])[A-Z]*/, 1);
+
+            return match && new Bool(match === "T");
+          }
+
+          dump() {
+            return `Boolean(${this})`;
+          }
+
+          lth(rhs) {
+            return !this._data && rhs.toBoolean();
+          }
+
+          gth(rhs) {
+            return this._data && !rhs.toBoolean();
+          }
+
+          toList() {
+            return this._data ? [this] : [];
+          }
+        }
+        TYPES.push(Bool);
+
+        const ENVIRONMENT = {};
+
+        class Ident extends Value {
+          static parse(stream) {
+            const match = stream.match(/^[a-z_][a-z0-9_]*/);
+
+            return match && new Ident(match);
+          }
+
+          constructor(ident) {
+            super();
+
+            this.ident = ident;
+          }
+
+          dump() {
+            return `Identifier(${this.ident})`;
+          }
+
+          assign(value) {
+            ENVIRONMENT[this.ident] = value;
+          }
+
+          run() {
+            const value = ENVIRONMENT[this.ident];
+
+            if (value === undefined) {
+              throw new RuntimeError(`Unknown identifier '${this.ident}'`);
+            } else {
+              return value;
+            }
+          }
+        }
+
+        TYPES.push(Ident);
+
+        class Int extends Literal {
+          static parse(stream) {
+            const match = stream.match(/^\d+/);
+
+            return match && new Int(Number(match));
+          }
+
+          dump() {
+            return `Number(${this})`;
+          }
+
+          toList() {
+            return [...this.toString()].map(x => new Int(+x));
+          }
+
+          add(rhs) {
+            return new Int(this._data + rhs.toNumber());
+          }
+
+          sub(rhs) {
+            return new Int(this._data - rhs.toNumber());
+          }
+
+          mul(rhs) {
+            return new Int(this._data * rhs.toNumber());
+          }
+
+          div(rhs) {
+            const rhsInt = rhs.toNumber();
+
+            if (rhsInt === 0) {
+              throw new RuntimeError("Cannot divide by zero");
+            } else {
+              return new Int(Math.trunc(this._data / rhsInt));
+            }
+          }
+
+          mod(rhs) {
+            const rhsInt = rhs.toNumber();
+
+            if (rhsInt === 0) {
+              throw new RuntimeError("Cannot modulo by zero");
+            } else {
+              return new Int(this._data % rhsInt);
+            }
+          }
+
+          pow(rhs) {
+            const rhsInt = rhs.toNumber();
+
+            if (this._data === 0 && rhsInt < 0) {
+              throw new RuntimeError("Cannot exponentiate zero to a negative power");
+            } else {
+              return new Int(Math.trunc(this._data ** rhsInt));
+            }
+          }
+
+          lth(rhs) {
+            return this._data < rhs.toNumber();
+          }
+
+          gth(rhs) {
+            return this._data > rhs.toNumber();
+          }
+        }
+
+        TYPES.push(Int);
+
+        class Null extends Literal {
+          static parse(stream) {
+            return stream.match(/^N[A-Z]*/) && new Null();
+          }
+
+          constructor() {
+            super(null);
+          }
+
+          dump() {
+            return "Null()";
+          }
+
+          eql(rhs) {
+            return rhs instanceof Null;
+          }
+
+          lth(_rhs) {
+            throw new RuntimeError("Cannot compare Null.");
+          }
+
+          gth(_rhs) {
+            throw new RuntimeError("Cannot compare Null.");
+          }
+
+          toList() {
+            return [];
+          }
+        }
+
+        TYPES.push(Null);
+
+        class Str extends Literal {
+          static parse(stream) {
+            const match = stream.match(/^(["'])([\s\S]*?)\1/, 2);
+
+            if (match !== null) {
+              return new Str(match);
+            }
+
+            const first = stream.peek();
+            if (first === "'" || first === '"') {
+              throw new ParseError(`Unterminated quote encountered: ${stream}`);
+            }
+          }
+
+          toList() {
+            return [...this.toString()].map(x => new Str(x));
+          }
+
+          toNumber() {
+            return parseInt(this._data, 10) || 0;
+          }
+
+          dump() {
+            return `String(${this})`;
+          }
+
+          add(rhs) {
+            return new Str(`${this}${rhs}`);
+          }
+
+          mul(rhs) {
+            return new Str(this._data.repeat(rhs.toNumber()));
+          }
+
+          lth(rhs) {
+            return this._data < rhs.toString();
+          }
+
+          gth(rhs) {
+            return this._data > rhs.toString();
+          }
+        }
+
+        TYPES.push(Str);
+
+        class List extends Value {
+          static parse() {
+            return null;
+          }
+
+          constructor(list) {
+            super(list);
+            this._data = list;
+          }
+
+          dump() {
+            return `List(${this._data.map(x => x.dump()).join(', ')})`;
+          }
+
+          toString() {
+            return this._data.join('\n');
+          }
+
+          add(rhs) {
+            return new List(this._data.concat(rhs.toList()));
+          }
+
+          mul(rhs) {
+            const a = [];
+            const n = rhs.toNumber();
+            for (let i = 0; i < n; i++) {
+              a.push(...this._data);
+            }
+            return new List(a);
+          }
+
+          pow(rhs) {
+            return new Str(this._data.join(rhs));
+          }
+
+          lth(rhs) {
+            return this.toString() < rhs.toString();
+          }
+
+          gth(rhs) {
+            return this.toString() > rhs.toString();
+          }
+
+          toNumber() {
+            return this._data.length;
+          }
+
+          toList() {
+            return this._data;
+          }
+
+          toBoolean() {
+            return this._data.length > 0;
+          }
+
+          eql(rhs) {
+            return rhs instanceof List && this._data.length === rhs._data.length && this._data.every((x, i) => x.eql(rhs._data[i]));
+          }
+
+          run() {
+            return this;
+          }
+        }
+
+        const FUNCTIONS = {};
+
+        class Func extends Value {
+          static parse(stream) {
+            const front = stream.peek();
+            const func = FUNCTIONS[front];
+
+            if (func === undefined) {
+              return null;
+            }
+
+            stream.match(/^(?:[A-Z]+|.)/);
+
+            let args = [];
+            for (let i = 0; i < func.length; i++) {
+              const arg = Value.parse(stream);
+
+              if (!arg) {
+                throw new ParseError(`Missing argument ${i + 1} for func '${front}'`);
+              }
+
+              args.push(arg);
+            }
+
+            return new Func(func, front, args);
+          }
+
+          constructor(func, name, args) {
+            super();
+
+            this.func = func;
+            this.name = name;
+            this.args = args;
+          }
+
+          run() {
+            return this.func(...this.args);
+          }
+
+          dump() {
+            let ret = "Function(" + this.name;
+
+            for (let val of this.args) {
+              ret += ", " + val.dump();
+            }
+
+            return ret + ")";
+          }
+
+          eql(rhs) {
+            return Object.is(this, rhs);
+          }
+        }
+
+        TYPES.push(Func);
+
+        function register(name, func) {
+          if (name.length !== 1) {
+            throw new Error("Name must be exactly one character long.");
+          }
+
+          FUNCTIONS[name] = func;
+        }
+
+        register("P", () => {
+          return inputs.length ? new Str(inputs.shift()) : new Null();
+        });
+
+        register("R", () => new Int(Math.floor(Math.random() * 0x1_0000_0000)));
+
+        register("@", () => new List([]));
+
+        register("E", (string) => evalRun(string.toString()));
+
+        register("A", (a) => {
+          const b = a.run();
+          return b instanceof Int
+            ? new Str(String.fromCharCode(b.toNumber()))
+            : new Int(b.toString().charCodeAt(0));
+        });
+
+        register(",", a => new List([a.run()]));
+
+        register("~", (a) => new Int(-a.toNumber()));
+
+        register("B", (block) => block);
+
+        register("C", (block) => block.run().run());
+
+        register("`", (command) => {
+          throw new RuntimeError("Run shell command not supported on DSO.");
+        });
+
+        register("Q", (status) => {
+          throw new RuntimeError("Exit not supported on DSO.");
+        });
+
+        register("!", (arg) => new Bool(!arg.toBoolean()));
+
+        register("L", (str) => new Int(str.toList().length));
+
+        register("D", (value) => {
+          const result = value.run();
+
+          output += result.dump();
+
+          return result;
+        });
+
+        register("O", (input) => {
+          const str = input.toString();
+
+          if (str.substr(-1) === "\\") {
+            output += str.substr(0, str.length - 1);
+          } else {
+            output += `${str}\n`;
+          }
+
+          return new Null();
+        });
+
+        register("+", (lhs, rhs) => lhs.run().add(rhs.run()));
+
+        register("-", (lhs, rhs) => lhs.run().sub(rhs.run()));
+
+        register("*", (lhs, rhs) => lhs.run().mul(rhs.run()));
+
+        register("/", (lhs, rhs) => lhs.run().div(rhs.run()));
+
+        register("%", (lhs, rhs) => lhs.run().mod(rhs.run()));
+
+        register("^", (lhs, rhs) => lhs.run().pow(rhs.run()));
+
+        register("<", (lhs, rhs) => new Bool(lhs.run().lth(rhs.run())));
+
+        register(">", (lhs, rhs) => new Bool(lhs.run().gth(rhs.run())));
+
+        register("?", (lhs, rhs) => new Bool(lhs.run().eql(rhs.run())));
+
+        register("&", (lhs, rhs) => {
+          lhs = lhs.run();
+          return lhs.toBoolean() ? rhs.run() : lhs;
+        });
+
+        register("|", (lhs, rhs) => {
+          lhs = lhs.run();
+          return lhs.toBoolean() ? lhs : rhs.run();
+        });
+
+        register(";", (lhs, rhs) => {
+          lhs.run();
+          return rhs.run();
+        });
+
+        register("=", (ident, value) => {
+          if (!(ident instanceof Ident)) {
+            ident = new Ident(ident.toString());
+          }
+
+          ident.assign((value = value.run()));
+          return value;
+        });
+
+        register("W", (condition, body) => {
+          let count = 0;
+          while (condition.toBoolean()) {
+            body.run();
+            count++;
+            if (count > 10000) {
+              throw new RuntimeError("Loop ran more than 10,000 times; execution stopped to prevent infinite loop.");
+            }
+          }
+
+          return new Null();
+        });
+
+        register("I", (cond, iftrue, iffalse) => {
+          return cond.toBoolean() ? iftrue.run() : iffalse.run();
+        });
+
+        register("G", (l, start, len) => {
+          if (l instanceof List) {
+            start = start.toNumber();
+            len = len.toNumber();
+
+            if (len === 0) {
+              return l[start];
+            }
+
+            return new List(l.slice(start, start + len));
+          }
+          return new Str(l.toString().substr(start.toNumber(), len.toNumber()));
+        });
+
+        register("S", (l, start, len, repl) => {
+          start = start.toNumber();
+          len = len.toNumber();
+          if (l instanceof List) {
+            if (len === 0) {
+              return new List(l.slice(0, start).concat([repl], l.slice(start + len)));
+            }
+            repl = repl.toList();
+
+            return new List(l.slice(0, start).concat(repl, l.slice(start + len)));
+          }
+          l = l.toString();
+          return new Str(l.slice(0, start) + repl.toString() + l.slice(start + len));
+        });
+
+        register(".", (lhs, rhs) => {
+          if (lhs instanceof Int && rhs instanceof Int) {
+            const a = [];
+            rhs = rhs.toNumber();
+            for (let i = lhs.toNumber(); i <= rhs; i++) {
+              a.push(i);
+            }
+            return new List(a);
+          }
+          lhs = lhs.toString().charCodeAt(0);
+          rhs = rhs.toString().charCodeAt(0);
+          const s = [];
+          for (let i = lhs; i <= rhs; i++) {
+            s.push(String.fromCharCode(i));
+          }
+          return new List(s);
+        });
+
+        function evalRun(input) {
+          const value = Value.parse(new Stream(input.toString()));
+
+          if (value === null) {
+            throw new ParseError("No value could be parsed!");
+          } else {
+            return value.run();
+          }
+        }
+
+        function run(input, inps = []) {
+          inputs = [...inps];
+          output = "";
+          const value = Value.parse(new Stream(input.toString()));
+
+          if (value === null) {
+            throw new ParseError("No value could be parsed!");
+          } else {
+            value.run();
+            return output;
+          }
+        }
+
+        return { run };
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <p class="btns">
+        <button title="Run" class="run">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512">
+            <!--! Font Awesome Pro 6.1.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. -->
+            <path
+              d="M361 215C375.3 223.8 384 239.3 384 256C384 272.7 375.3 288.2 361 296.1L73.03 472.1C58.21 482 39.66 482.4 24.52 473.9C9.377 465.4 0 449.4 0 432V80C0 62.64 9.377 46.63 24.52 38.13C39.66 29.64 58.21 29.99 73.03 39.04L361 215z"
+            />
+          </svg>
+        </button>
+        <button title="Generate Link" class="gen">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512">
+            <!--! Font Awesome Pro 6.1.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. -->
+            <path
+              d="M172.5 131.1C228.1 75.51 320.5 75.51 376.1 131.1C426.1 181.1 433.5 260.8 392.4 318.3L391.3 319.9C381 334.2 361 337.6 346.7 327.3C332.3 317 328.9 297 339.2 282.7L340.3 281.1C363.2 249 359.6 205.1 331.7 177.2C300.3 145.8 249.2 145.8 217.7 177.2L105.5 289.5C73.99 320.1 73.99 372 105.5 403.5C133.3 431.4 177.3 435 209.3 412.1L210.9 410.1C225.3 400.7 245.3 404 255.5 418.4C265.8 432.8 262.5 452.8 248.1 463.1L246.5 464.2C188.1 505.3 110.2 498.7 60.21 448.8C3.741 392.3 3.741 300.7 60.21 244.3L172.5 131.1zM467.5 380C411 436.5 319.5 436.5 263 380C213 330 206.5 251.2 247.6 193.7L248.7 192.1C258.1 177.8 278.1 174.4 293.3 184.7C307.7 194.1 311.1 214.1 300.8 229.3L299.7 230.9C276.8 262.1 280.4 306.9 308.3 334.8C339.7 366.2 390.8 366.2 422.3 334.8L534.5 222.5C566 191 566 139.1 534.5 108.5C506.7 80.63 462.7 76.99 430.7 99.9L429.1 101C414.7 111.3 394.7 107.1 384.5 93.58C374.2 79.2 377.5 59.21 391.9 48.94L393.5 47.82C451 6.731 529.8 13.25 579.8 63.24C636.3 119.7 636.3 211.3 579.8 267.7L467.5 380z"
+            />
+          </svg>
+        </button>
+        <button class="cgcc" title="Generate CGCC Submission">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+            <!--! Font Awesome Pro 6.1.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2022 Fonticons, Inc. -->
+            <path
+              d="M223.7 130.8L149.1 7.77C147.1 2.949 141.9 0 136.3 0H16.03c-12.95 0-20.53 14.58-13.1 25.18l111.3 158.9C143.9 156.4 181.7 137.3 223.7 130.8zM256 160c-97.25 0-176 78.75-176 176S158.8 512 256 512s176-78.75 176-176S353.3 160 256 160zM348.5 317.3l-37.88 37l8.875 52.25c1.625 9.25-8.25 16.5-16.63 12l-46.88-24.62L209.1 418.5c-8.375 4.5-18.25-2.75-16.63-12l8.875-52.25l-37.88-37C156.6 310.6 160.5 299 169.9 297.6l52.38-7.625L245.7 242.5c2-4.25 6.125-6.375 10.25-6.375S264.2 238.3 266.2 242.5l23.5 47.5l52.38 7.625C351.6 299 355.4 310.6 348.5 317.3zM495.1 0H375.7c-5.621 0-10.83 2.949-13.72 7.77l-73.76 122.1c42 6.5 79.88 25.62 109.5 53.38l111.3-158.9C516.5 14.58 508.9 0 495.1 0z"
+            />
+          </svg>
+        </button>
+      </p>
+      <div>
+        <label for="code">Code: <span class="bytecount">0</span> bytes</label>
+      </div>
+      <div id="code"></div>
+      <button class="minify">Minify</button><button class="format">Format</button> <button class="disable-show-args">Disable showing arguments on hover</button>
+      <div><label for="inputs">Inputs:</label></div>
+      <div id="inputs"></div>
+      <div class="output"></div>
+      <button class="copy" style="display: none">Copy to Clipboard</button>
+    </div>
+
+    <script>
+      let codeEditor, inputEditor;
+      require.config({
+        paths: {
+          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs",
+        },
+      });
+      require(["vs/editor/editor.main"], function () {
+        monaco.languages.register({ id: "knight" });
+        monaco.languages.setMonarchTokensProvider("knight", {
+          tokenizer: {
+            root: [
+              [/"/, "string", "@dbq"],
+              [/'/, "string", "@sgq"],
+              [/[ \t\r\n]+/, "white"],
+              [/#.*$/, "comment"],
+              [/\d+/, "number"],
+              [/[_a-z][_a-z0-9]*/, "identifier"],
+              [/[TFNPREBCQLDOAWIGSV][A-Z_]*/, "keyword"],
+              [/[+\-*\/~=`;:%><?&|!,@\.]/, "operators"],
+            ],
+            dbq: [
+              [/[^"]+/, "string"],
+              [/"/, "string", "@pop"],
+            ],
+            sgq: [
+              [/[^']+/, "string"],
+              [/'/, "string", "@pop"],
+            ],
+          }
+        });
+        monaco.languages.setLanguageConfiguration("knight", {
+          surroundingPairs: [{ open: "(", close: ")" }],
+          autoClosingPairs: [{ open: "(", close: ")" }],
+          brackets: [["(", ")"]]
+        });
+        let decorations = [];
+        let showArgs = true;
+        monaco.languages.registerHoverProvider("knight", {
+          provideHover: (model, position) => {
+            if (!showArgs) {
+              decorations = model.deltaDecorations(decorations, []);
+              return;
+            }
+            const code = model.getValue();
+            let startAt = model.getOffsetAt(position);
+            let upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            while (upper.includes(code[startAt]) && upper.includes(code[startAt - 1])) {
+              startAt--;
+            }
+            let c = code.slice(startAt);
+            function f() {
+              if (!c) return null;
+              if (c[0] === '#') {
+                const i = c.indexOf('\n') + 1;
+                c = c.slice(i);
+                const t = ' '.repeat(i);
+                const r = f();
+                return r === null
+                  ? t
+                  : Array.isArray(r)
+                  ? [t + r[0], ...r.slice(1)]
+                  : t + r;
+              }
+              if (" \t\r\n()[]{}".includes(c[0])) {
+                const t = c[0];
+                c = c.slice(1);
+                const r = f();
+                return r === null
+                  ? t
+                  : Array.isArray(r)
+                  ? [t + r[0], ...r.slice(1)]
+                  : t + r;
+              }
+
+              const funcTypes = [
+                /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*|@)/, // nilads
+                /^([~!:,]|[OLADBCQE][A-Z_]*)/, // monads
+                /^([+\-*\/%^<>?&|;=\.]|[W][A-Z_]*)/, // dyads
+                /^[IG][A-Z_]*/, // triads
+                /^S[A-Z_]*/, // tetrads
+              ];
+
+              for (const idx in funcTypes) {
+                const match = c.match(funcTypes[idx]);
+                if (match) {
+                  c = c.slice(match[0].length);
+                  return +idx === 0
+                    ? match[0]
+                    : [match[0], ...[...Array(+idx)].map(() => f())];
+                }
+              }
+            }
+            const joiner = x => Array.isArray(x) ? x.map(joiner).join('') : x === null ? '' : x;
+            const res = f();
+            console.log(res);
+            if (!res || !Array.isArray(res)) {
+              decorations = model.deltaDecorations(decorations, []);
+              return;
+            }
+            const ints = res.map((s => v => [s, s += joiner(v).length])(startAt)).slice(1);
+            const lnCols = ints.map(x => x.map(x => model.getPositionAt(x)));
+            decorations = model.deltaDecorations(decorations, decorations = lnCols.map((x, i) => ({
+              range: new monaco.Range(x[0].lineNumber, x[0].column, x[1].lineNumber, x[1].column),
+              options: {
+                inlineClassName: ['firstArg', 'secondArg', 'thirdArg', 'fourthArg'][i],
+              }
+            })));
+          },
+        });
+        codeEditor = monaco.editor.create(document.querySelector("#code"), {
+          language: "knight",
+          lineNumbers: "off",
+          minimap: {
+            enabled: false,
+          },
+          folding: false,
+          theme: "vs-dark",
+          wordWrap: "on",
+          quickSuggestions: false,
+        });
+        inputEditor = monaco.editor.create(document.querySelector("#inputs"), {
+          language: "plaintext",
+          lineNumbers: "off",
+          minimap: {
+            enabled: false,
+          },
+          folding: false,
+          theme: "vs-dark",
+          wordWrap: "on",
+          quickSuggestions: false,
+        });
+        codeEditor.getModel().setEOL(0);
+        inputEditor.getModel().setEOL(0);
+        document.querySelector('#code').addEventListener('mouseleave', () => {
+          decorations = codeEditor.getModel().deltaDecorations(decorations, []);
+        });
+        codeEditor.onDidChangeModelContent(() => {
+          $(".bytecount").innerText = codeEditor.getValue().replace(/\r\n/g, "\n").length;
+        });
+        if (location.hash) {
+          try {
+            const code = location.hash.substr(1);
+            const [c, i] = JSON.parse(decode(code));
+            codeEditor.setValue(c);
+            inputEditor.setValue(i);
+            codeEditor.getModel().setEOL(0);
+            inputEditor.getModel().setEOL(0);
+          } catch (e) {}
+        }
+        document.querySelector('.minify').addEventListener('click', () => {
+          let tokens = codeEditor.getValue().replace(/#.*$/mg, '').match(/\d+|[a-z_][_a-z\d]*|[A-Z]+|'[^]*?'|"[^]*?"|[^()\[\]{}\s:]/g)
+          let vars = {}, c = 0;
+          codeEditor.setValue(tokens.map((token,i,a) => {
+            prev = a[i-1] || ''
+            if (token[0] == '"' || token[0] == "'") {
+              return token
+            } else if (token.match(/^[_a-z][_a-z\d]*$/)) {
+              return (prev.match(/^[_a-z][_a-z\d]*$/) ? ' ' : '') + token;
+            } else if (token.match(/^[A-Z]+$/)) {
+              return (prev.match(/^[A-Z]+$/) ? ' ' : '') + token[0];
+            } else if (token.match(/^\d+$/)) {
+              return (prev.match(/^[_a-z\d]$/) ? ' ' : '') + token;
+            } else return token;
+          }).join(''));
+          codeEditor.getModel().setEOL(0);
+        });
+        document.querySelector('.format').addEventListener('click', () => {
+          let c = codeEditor.getValue();
+          function f() {
+            if (!c) return null;
+            if (c[0] === '#') {
+              const i = c.indexOf('\n') + 1;
+              let s = c.slice(0, i);
+              c = c.slice(i);
+              const r = f();
+              return Array.isArray(r) ? [s + r[0], ...r.slice(1)] : s + r;
+            }
+            if (" \t\r\n()[]{}".includes(c[0])) {
+              c = c.slice(1);
+              return f();
+            }
+
+            const funcTypes = [
+              /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*|@)/, // nilads
+              /^([~!:,]|[OLADBCQE][A-Z_]*)/, // monads
+              /^([+\-*\/%^<>?&|;=\.]|[W][A-Z_]*)/, // dyads
+              /^[IG][A-Z_]*/, // triads
+              /^S[A-Z_]*/, // tetrads
+            ];
+
+            for (const idx in funcTypes) {
+              const match = c.match(funcTypes[idx]);
+              if (match) {
+                c = c.slice(match[0].length);
+                const name =
+                  {
+                    E: "EVAL",
+                    O: "OUTPUT",
+                    L: "LENGTH",
+                    A: "ASCII",
+                    Q: "QUIT",
+                    D: "DUMP",
+                    S: "SET",
+                    G: "GET",
+                    P: "PROMPT",
+                    T: "TRUE",
+                    F: "FALSE",
+                    N: "NULL",
+                    R: "RANDOM",
+                    I: "IF",
+                    W: "WHILE",
+                    B: "BLOCK",
+                    C: "CALL"
+                  }[match[0]] || match[0];
+                return +idx === 0 ? name : [name, ...[...Array(+idx)].map(() => f())];
+              }
+            }
+          }
+          const g = (x, p) => {
+            if (typeof x === 'string') return x;
+            if (x === null) return '';
+            if (x[0] === ';') {
+              return "; " + g(x[1], 1) + "\n" + (x[2][0] === ";" ? g(x[2], 1) : ": " + g(x[2], 1));
+            }
+            if (x[0] === 'WHILE') {
+              return "WHILE " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            if (x[0] === 'IF') {
+              return "IF " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n') + "\n# ELSE\n" + g(x[3], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            if (x[0] === 'BLOCK') {
+              return "BLOCK" + "\n" + g(x[1], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            return p ? x.map(x => g(x)).join(' ') : '(' + x.map(x => g(x)).join(' ') + ')';
+          };
+
+          codeEditor.setValue(g(f()));
+          codeEditor.getModel().setEOL(0);
+        });
+        document.querySelector('.disable-show-args').addEventListener('click', () => {
+          showArgs = !showArgs;
+          document.querySelector('.disable-show-args').innerText = document.querySelector('.disable-show-args').innerText.replace(/Disable|Enable/, showArgs ? 'Disable' : 'Enable');
+        });
+      });
+    </script>
+    <script>
+      const $ = (x) => document.querySelector(x);
+      const $$ = (x) => document.querySelectorAll(x);
+      $(".run").addEventListener("click", () => {
+        $(".copy").style.display = "";
+        try {
+          const out = Knight.run(
+            codeEditor.getValue().replace(/\r\n/g, "\n"),
+            inputEditor.getValue().replace(/\r\n/g, "\n").split("\n")
+          );
+          $(".output").innerText = out;
+        } catch (e) {
+          $(".output").innerText = e;
+        }
+      });
+      const encode = (x) => btoa(unescape(encodeURIComponent(x.replace(/\r\n/g, "\n"))));
+      const decode = (x) => decodeURIComponent(escape(atob(x)));
+      $(".gen").addEventListener("click", () => {
+        $(".copy").style.display = "";
+        location.hash =
+          "#" + encode(JSON.stringify([codeEditor.getValue(), inputEditor.getValue()]));
+        $(".output").innerText =
+          location.protocol + "//" + location.host + "/" + location.hash;
+      });
+      $(".cgcc").addEventListener("click", () => {
+        const l = codeEditor.getValue().replace(/\r\n/g, "\n").length;
+        $(".gen").click();
+        $(".copy").style.display = "";
+        $(
+          ".output"
+        ).innerText = `# [Knight](https://github.com/knight-lang/knight-lang), ${l} byte${
+          l === 1 ? "" : "s"
+        }
+
+\`\`\`
+${codeEditor.getValue().replace(/\r\n/g, "\n")}
+\`\`\`
+
+[Try it online!](${$(".output").innerText})`;
+      });
+      $(".copy").addEventListener("click", () => {
+        navigator.clipboard.writeText($(".output").innerText);
+      });
+    </script>
+  </body>
+</html>
