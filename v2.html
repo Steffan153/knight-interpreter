@@ -453,7 +453,10 @@
           }
 
           toString() {
-            return '[' + this._data.join(', ') + ']';
+            return '[' + this._data.map(x => {
+              const r = x.run();
+              return r instanceof Str ? '"' + r.toString().replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + '"' : r.toString();
+            }).join(', ') + ']';
           }
 
           add(rhs) {
@@ -1069,7 +1072,7 @@
         location.hash =
           "#" + encode(JSON.stringify([codeEditor.getValue(), inputEditor.getValue()]));
         $(".output").innerText =
-          location.protocol + "//" + location.host + "/" + location.hash;
+          location.protocol + "//" + location.host + "/v2" + location.hash;
       });
       $(".cgcc").addEventListener("click", () => {
         const l = codeEditor.getValue().replace(/\r\n/g, "\n").length;
@@ -1077,7 +1080,7 @@
         $(".copy").style.display = "";
         $(
           ".output"
-        ).innerText = `# [Knight](https://github.com/knight-lang/knight-lang), ${l} byte${
+        ).innerText = `# [Knight](https://github.com/knight-lang/knight-lang) (v2.0-alpha), ${l} byte${
           l === 1 ? "" : "s"
         }
 
