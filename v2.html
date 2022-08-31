@@ -683,6 +683,7 @@
         });
 
         register("G", (l, start, len) => {
+          l = l.run();
           if (l instanceof List) {
             start = start.toNumber();
             len = len.toNumber();
@@ -697,6 +698,7 @@
         });
 
         register("S", (l, start, len, repl) => {
+          l = l.run();
           start = start.toNumber();
           len = len.toNumber();
           if (l instanceof List) {
@@ -712,6 +714,8 @@
         });
 
         register(".", (lhs, rhs) => {
+          lhs = lhs.run();
+          rhs = rhs.run();
           if (lhs instanceof Int && rhs instanceof Int) {
             const a = [];
             rhs = rhs.toNumber();
