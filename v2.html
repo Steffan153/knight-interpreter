@@ -687,6 +687,7 @@
           if (l instanceof List) {
             start = start.toNumber();
             len = len.toNumber();
+            l = l.toList();
 
             if (len === 0) {
               return l[start];
@@ -702,6 +703,7 @@
           start = start.toNumber();
           len = len.toNumber();
           if (l instanceof List) {
+            l = l.toList();
             if (len === 0) {
               return new List(l.slice(0, start).concat([repl], l.slice(start + len)));
             }
