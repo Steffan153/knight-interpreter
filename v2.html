@@ -453,7 +453,7 @@
           }
 
           toString() {
-            return this._data.join('\n');
+            return '[' + this._data.join(', ') + ']';
           }
 
           add(rhs) {
