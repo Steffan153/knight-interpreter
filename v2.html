@@ -455,7 +455,7 @@
           toString() {
             return '[' + this._data.map(x => {
               const r = x.run();
-              return r instanceof Str ? '"' + r.toString().replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + '"' : r.toString();
+              return r instanceof Str ? '"' + r.toString().replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n") + '"' : r.toString();
             }).join(', ') + ']';
           }
 
