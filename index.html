@@ -843,7 +843,7 @@
             } else if (token.match(/^[A-Z]+$/)) {
               return (prev.match(/^[A-Z]+$/) ? ' ' : '') + token[0];
             } else if (token.match(/^\d+$/)) {
-              return (prev.match(/^[_a-z\d]$/) ? ' ' : '') + token;
+              return (prev.match(/^[_a-z][_a-z\d]*$/) ? ' ' : '') + token;
             } else return token;
           }).join(''));
           codeEditor.getModel().setEOL(0);
