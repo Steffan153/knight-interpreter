@@ -859,15 +859,15 @@
               const r = f();
               return Array.isArray(r) ? [s + r[0], ...r.slice(1)] : s + r;
             }
-            if (" \t\r\n()[]{}".includes(c[0])) {
+            if (" \t\r\n()[]{}:".includes(c[0])) {
               c = c.slice(1);
               return f();
             }
 
             const funcTypes = [
               /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*)/, // nilads
-              /^([~!:]|[OLADBCQE][A-Z_]*)/, // monads
-              /^([+\-*\/%^<>?&|;=W]|[W][A-Z_]*)/, // dyads
+              /^([~!]|[OLADBCQE][A-Z_]*)/, // monads
+              /^([+\-*\/%^<>?&|;=]|[W][A-Z_]*)/, // dyads
               /^[IG][A-Z_]*/, // triads
               /^S[A-Z_]*/, // tetrads
             ];
