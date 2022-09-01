@@ -668,6 +668,17 @@
           return value;
         });
 
+        register("X", (ident, arr, body) => {
+          if (!(ident instanceof Ident)) {
+            ident = new Ident(ident.toString());
+          }
+          for (const val of arr.toList()) {
+            ident.assign(val);
+            body.run();
+          }
+          return new Null();
+        });
+
         register("W", (condition, body) => {
           let count = 0;
           while (condition.toBoolean()) {
@@ -725,7 +736,7 @@
             const a = [];
             rhs = rhs.toNumber();
             for (let i = lhs.toNumber(); i <= rhs; i++) {
-              a.push(i);
+              a.push(new Int(i));
             }
             return new List(a);
           }
@@ -733,7 +744,7 @@
           rhs = rhs.toString().charCodeAt(0);
           const s = [];
           for (let i = lhs; i <= rhs; i++) {
-            s.push(String.fromCharCode(i));
+            s.push(new Str(String.fromCharCode(i)));
           }
           return new List(s);
         });
@@ -822,7 +833,7 @@
               [/#.*$/, "comment"],
               [/\d+/, "number"],
               [/[_a-z][_a-z0-9]*/, "identifier"],
-              [/[TFNPREBCQLDOAWIGSV][A-Z_]*/, "keyword"],
+              [/[TFNPREBCQLDOAWIGSVX][A-Z_]*/, "keyword"],
               [/[+\-*\/~=`;:%><?&|!,@\.]/, "operators"],
             ],
             dbq: [
@@ -883,7 +894,7 @@
                 /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*|@)/, // nilads
                 /^([~!:,]|[OLADBCQE][A-Z_]*)/, // monads
                 /^([+\-*\/%^<>?&|;=\.]|[W][A-Z_]*)/, // dyads
-                /^[IG][A-Z_]*/, // triads
+                /^[IGX][A-Z_]*/, // triads
                 /^S[A-Z_]*/, // tetrads
               ];
 
@@ -991,7 +1002,7 @@
               /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*|@)/, // nilads
               /^([~!:,]|[OLADBCQE][A-Z_]*)/, // monads
               /^([+\-*\/%^<>?&|;=\.]|[W][A-Z_]*)/, // dyads
-              /^[IG][A-Z_]*/, // triads
+              /^[IGX][A-Z_]*/, // triads
               /^S[A-Z_]*/, // tetrads
             ];
 
@@ -1017,7 +1028,8 @@
                     I: "IF",
                     W: "WHILE",
                     B: "BLOCK",
-                    C: "CALL"
+                    C: "CALL",
+                    X: "XFOR"
                   }[match[0]] || match[0];
                 return +idx === 0 ? name : [name, ...[...Array(+idx)].map(() => f())];
               }
@@ -1031,6 +1043,9 @@
             }
             if (x[0] === 'WHILE') {
               return "WHILE " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n');
+            }
+            if (x[0] === 'XFOR') {
+              return "XFOR " + g(x[1], 1) + " " + g(x[2]) + "\n" + g(x[3], 1).split('\n').map(x => '    ' + x).join('\n');
             }
             if (x[0] === 'IF') {
               return "IF " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n') + "\n# ELSE\n" + g(x[3], 1).split('\n').map(x => '    ' + x).join('\n');
