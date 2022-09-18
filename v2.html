@@ -140,7 +140,7 @@
           }
 
           stripWhitespace() {
-            this.match(/^([\]\[\s(){}:]+|#[^\n]*(\n|$))*/);
+            this.match(/^([\s():]+|#[^\n]*(\n|$))*/);
           }
 
           peek() {
@@ -453,10 +453,11 @@
           }
 
           toString() {
-            return '[' + this._data.map(x => {
-              const r = x.run();
-              return r instanceof Str ? '"' + r.toString().replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n") + '"' : r.toString();
-            }).join(', ') + ']';
+            return this._data.join('\n');
+            // return '[' + this._data.map(x => {
+            //   const r = x.run();
+            //   return r instanceof Str ? '"' + r.toString().replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\n") + '"' : r.toString();
+            // }).join(', ') + ']';
           }
 
           add(rhs) {
@@ -477,11 +478,25 @@
           }
 
           lth(rhs) {
-            return this.toString() < rhs.toString();
+            rhs = rhs.toList();
+            const lhs = this._data;
+            const minL = Math.min(lhs.length, rhs.length);
+            for (let i = 0; i < minL; i++) {
+              if (lhs[i].eql(rhs[i])) continue;
+              return new Bool(lhs[i] < rhs[i]);
+            }
+            return lhs.length < rhs.length;
           }
 
           gth(rhs) {
-            return this.toString() > rhs.toString();
+            rhs = rhs.toList();
+            const lhs = this._data;
+            const minL = Math.min(lhs.length, rhs.length);
+            for (let i = 0; i < minL; i++) {
+              if (lhs[i].eql(rhs[i])) continue;
+              return new Bool(lhs[i] > rhs[i]);
+            }
+            return lhs.length > rhs.length;
           }
 
           toNumber() {
@@ -588,18 +603,21 @@
 
         register(",", a => new List([a.run()]));
 
+        register("[", a => a.run().toList()[0]);
+
+        register("]", a => {
+          const l = a.run();
+          return l instanceof Str ? new Str(l.toString().slice(1)) : new List(a.toList().slice(1));
+        });
+
         register("~", (a) => new Int(-a.toNumber()));
 
         register("B", (block) => block);
 
         register("C", (block) => block.run().run());
 
-        register("`", (command) => {
-          throw new RuntimeError("Run shell command not supported on DSO.");
-        });
-
         register("Q", (status) => {
-          throw new RuntimeError("Exit not supported on DSO.");
+          throw new Exit("Exited with code " + status.run().toString());
         });
 
         register("!", (arg) => new Bool(!arg.toBoolean()));
@@ -668,17 +686,6 @@
           return value;
         });
 
-        register("X", (ident, arr, body) => {
-          if (!(ident instanceof Ident)) {
-            ident = new Ident(ident.toString());
-          }
-          for (const val of arr.toList()) {
-            ident.assign(val);
-            body.run();
-          }
-          return new Null();
-        });
-
         register("W", (condition, body) => {
           let count = 0;
           while (condition.toBoolean()) {
@@ -727,26 +734,6 @@
           }
           l = l.toString();
           return new Str(l.slice(0, start) + repl.toString() + l.slice(start + len));
-        });
-
-        register(".", (lhs, rhs) => {
-          lhs = lhs.run();
-          rhs = rhs.run();
-          if (lhs instanceof Int && rhs instanceof Int) {
-            const a = [];
-            rhs = rhs.toNumber();
-            for (let i = lhs.toNumber(); i <= rhs; i++) {
-              a.push(new Int(i));
-            }
-            return new List(a);
-          }
-          lhs = lhs.toString().charCodeAt(0);
-          rhs = rhs.toString().charCodeAt(0);
-          const s = [];
-          for (let i = lhs; i <= rhs; i++) {
-            s.push(new Str(String.fromCharCode(i)));
-          }
-          return new List(s);
         });
 
         function evalRun(input) {
@@ -833,8 +820,8 @@
               [/#.*$/, "comment"],
               [/\d+/, "number"],
               [/[_a-z][_a-z0-9]*/, "identifier"],
-              [/[TFNPREBCQLDOAWIGSVX][A-Z_]*/, "keyword"],
-              [/[+\-*\/~=`;:%><?&|!,@\.]/, "operators"],
+              [/[TFNPREBCQLDOAWIGSV][A-Z_]*/, "keyword"],
+              [/[+\-*\/~=;:%><?&|!,@\[\]]/, "operators"],
             ],
             dbq: [
               [/[^"]+/, "string"],
@@ -879,7 +866,7 @@
                   ? [t + r[0], ...r.slice(1)]
                   : t + r;
               }
-              if (" \t\r\n()[]{}".includes(c[0])) {
+              if (" \t\r\n()".includes(c[0])) {
                 const t = c[0];
                 c = c.slice(1);
                 const r = f();
@@ -892,9 +879,9 @@
 
               const funcTypes = [
                 /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*|@)/, // nilads
-                /^([~!:,]|[OLADBCQE][A-Z_]*)/, // monads
-                /^([+\-*\/%^<>?&|;=\.]|[W][A-Z_]*)/, // dyads
-                /^[IGX][A-Z_]*/, // triads
+                /^([~!:,\[\]]|[OLADBCQE][A-Z_]*)/, // monads
+                /^([+\-*\/%^<>?&|;=]|[W][A-Z_]*)/, // dyads
+                /^[IG][A-Z_]*/, // triads
                 /^S[A-Z_]*/, // tetrads
               ];
 
@@ -966,7 +953,7 @@
           } catch (e) {}
         }
         document.querySelector('.minify').addEventListener('click', () => {
-          let tokens = codeEditor.getValue().replace(/#.*$/mg, '').match(/\d+|[a-z_][_a-z\d]*|[A-Z]+|'[^]*?'|"[^]*?"|[^()\[\]{}\s:]/g)
+          let tokens = codeEditor.getValue().replace(/#.*$/mg, '').match(/\d+|[a-z_][_a-z\d]*|[A-Z]+|'[^]*?'|"[^]*?"|[^()\s:]/g)
           let vars = {}, c = 0;
           codeEditor.setValue(tokens.map((token,i,a) => {
             prev = a[i-1] || ''
@@ -977,7 +964,7 @@
             } else if (token.match(/^[A-Z]+$/)) {
               return (prev.match(/^[A-Z]+$/) ? ' ' : '') + token[0];
             } else if (token.match(/^\d+$/)) {
-              return (prev.match(/^[_a-z\d]$/) ? ' ' : '') + token;
+              return (prev.match(/^[_a-z][_a-z\d]*$|^\d+$/) ? ' ' : '') + token;
             } else return token;
           }).join(''));
           codeEditor.getModel().setEOL(0);
@@ -993,16 +980,16 @@
               const r = f();
               return Array.isArray(r) ? [s + r[0], ...r.slice(1)] : s + r;
             }
-            if (" \t\r\n()[]{}".includes(c[0])) {
+            if (" \t\r\n():".includes(c[0])) {
               c = c.slice(1);
               return f();
             }
 
             const funcTypes = [
               /^((['"]).*?\2|\d+|[TFNPR][A-Z_]*|[_a-z][_a-z0-9]*|@)/, // nilads
-              /^([~!:,]|[OLADBCQE][A-Z_]*)/, // monads
-              /^([+\-*\/%^<>?&|;=\.]|[W][A-Z_]*)/, // dyads
-              /^[IGX][A-Z_]*/, // triads
+              /^([~!:,\[\]]|[OLADBCQE][A-Z_]*)/, // monads
+              /^([+\-*\/%^<>?&|;=]|[W][A-Z_]*)/, // dyads
+              /^[IG][A-Z_]*/, // triads
               /^S[A-Z_]*/, // tetrads
             ];
 
@@ -1028,8 +1015,7 @@
                     I: "IF",
                     W: "WHILE",
                     B: "BLOCK",
-                    C: "CALL",
-                    X: "XFOR"
+                    C: "CALL"
                   }[match[0]] || match[0];
                 return +idx === 0 ? name : [name, ...[...Array(+idx)].map(() => f())];
               }
@@ -1044,16 +1030,20 @@
             if (x[0] === 'WHILE') {
               return "WHILE " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n');
             }
-            if (x[0] === 'XFOR') {
-              return "XFOR " + g(x[1], 1) + " " + g(x[2]) + "\n" + g(x[3], 1).split('\n').map(x => '    ' + x).join('\n');
-            }
             if (x[0] === 'IF') {
               return "IF " + g(x[1]) + "\n" + g(x[2], 1).split('\n').map(x => '    ' + x).join('\n') + "\n# ELSE\n" + g(x[3], 1).split('\n').map(x => '    ' + x).join('\n');
             }
             if (x[0] === 'BLOCK') {
               return "BLOCK" + "\n" + g(x[1], 1).split('\n').map(x => '    ' + x).join('\n');
             }
-            return p ? x.map(x => g(x)).join(' ') : '(' + x.map(x => g(x)).join(' ') + ')';
+            let s = x.map(x => g(x));
+            s = s.map(x => {
+              if (x.startsWith('IF')) {
+                return '\n' + x.split('\n').map(x => '    ' + x).join('\n') + '\n';
+              }
+              return x;
+            });
+            return p ? s.join(' ') : '(' + s.join(' ') + ')';
           };
 
           codeEditor.setValue(g(f()));
