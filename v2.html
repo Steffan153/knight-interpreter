@@ -306,7 +306,7 @@
           }
 
           toList() {
-            return [...this.toString()].map(x => new Int(+x));
+            return [...Math.abs(this._data).toString()].map(x => new Int(this._data < 0 ? -x : +x));
           }
 
           add(rhs) {
