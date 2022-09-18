@@ -133,6 +133,7 @@
         class KnightError extends Error {}
         class ParseError extends KnightError {}
         class RuntimeError extends KnightError {}
+        class Exit extends KnightError {}
 
         class Stream {
           constructor(source) {
