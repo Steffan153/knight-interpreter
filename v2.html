@@ -241,7 +241,7 @@
           }
 
           dump() {
-            return `Boolean(${this})`;
+            return this._data ? 'true' : 'false';
           }
 
           lth(rhs) {
@@ -302,7 +302,7 @@
           }
 
           dump() {
-            return `Number(${this})`;
+            return this._data.toString();
           }
 
           toList() {
@@ -372,7 +372,7 @@
           }
 
           dump() {
-            return "Null()";
+            return "null";
           }
 
           eql(rhs) {
@@ -417,7 +417,7 @@
           }
 
           dump() {
-            return `String(${this})`;
+            return '"' + this.toString().replace(/\\/g, "\\\\").replace(/\t/g, "\\t").replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/"/g, '\\"') + '"';
           }
 
           add(rhs) {
@@ -450,7 +450,7 @@
           }
 
           dump() {
-            return `List(${this._data.map(x => x.dump()).join(', ')})`;
+            return `[${this._data.map(x => x.dump()).join(', ')}]`;
           }
 
           toString() {
