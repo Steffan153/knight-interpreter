@@ -605,24 +605,7 @@
         }
 
         register("P", () => {
-          let line = "";
-          let buf = Buffer.alloc(1);
-
-          do {
-            fs.readSync(0, buf, 0, 1);
-
-            if (buf[0] == 0x00) {
-              if (!line) return new Null();
-              break;
-            }
-
-            line += buf;
-          } while (buf[0] !== 10);
-
-          if (line.endsWith("\r\n")) line = line.slice(0, -2);
-          if (line.endsWith("\n")) line = line.slice(0, -1);
-
-          return new Str(line);
+          return inputs.length ? new Str(inputs.shift()) : new Null();
         });
 
         register("R", () => new Int(Math.floor(Math.random() * 0x1_0000_0000)));
