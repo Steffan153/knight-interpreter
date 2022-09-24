@@ -651,7 +651,7 @@
         register("C", (block) => block.run().run());
 
         register("Q", (status) => {
-          process.exit(status.run().toNumber());
+          throw new Exit("Exited with code " + status.run().toString());
         });
 
         register("!", (arg) => new Bool(!arg.toBoolean()));
